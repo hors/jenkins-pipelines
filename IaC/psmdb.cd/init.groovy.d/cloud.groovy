@@ -29,6 +29,7 @@ imageMap['min-stretch-x64'] = 'ami-b6e499ce'
 imageMap['min-trusty-x64'] = 'ami-08fbb070'
 imageMap['min-xenial-x64'] = 'ami-ba602bc2'
 imageMap['psmdb'] = imageMap['min-xenial-x64']
+imageMap['docker'] = imageMap['micro-amazon']
 
 priceMap = [:]
 priceMap['t2.small'] = '0.01'
@@ -56,7 +57,8 @@ initMap['docker'] = '''
 
     if ! mountpoint -q /mnt; then
         DEVICE=$(ls /dev/xvdd /dev/nvme1n1 | head -1)
-        sudo mkfs.ext4 ${DEVICE}
+        sudo yum -y install xfsprogs
+        sudo mkfs.xfs ${DEVICE}
         sudo mount -o noatime ${DEVICE} /mnt
     fi
     sudo ethtool -K eth0 sg off
@@ -85,15 +87,15 @@ initMap['docker'] = '''
     sudo mkdir -p /etc/docker
     echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json
     sudo systemctl status docker || sudo systemctl start docker
-    sudo service docker status || sudo service docker start
-    echo "* * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
+    echo sudo service docker status || sudo service docker start
+    echo "*/15 * * * * root /usr/sbin/route add default gw 10.177.1.1 eth0" | sudo tee /etc/cron.d/fix-default-route
 '''
 initMap['docker-32gb'] = initMap['docker']
 initMap['micro-amazon'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         DEVICE=$(ls /dev/xvdd /dev/nvme1n1 | head -1)
-        sudo mkfs.ext2 ${DEVICE}
+        sudo mkfs.xfs ${DEVICE}
         sudo mount ${DEVICE} /mnt
     fi
     until sudo yum makecache; do
@@ -108,7 +110,8 @@ initMap['min-artful-x64'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         DEVICE=$(ls /dev/xvdd /dev/nvme1n1 | head -1)
-        sudo mkfs.ext2 ${DEVICE}
+        sudo apt-get -y install xfsprogs
+        sudo mkfs.xfs ${DEVICE}
         sudo mount ${DEVICE} /mnt
     fi
     until sudo apt-get update; do
@@ -125,7 +128,8 @@ initMap['min-jessie-x64'] = '''
     set -o xtrace
     if ! mountpoint -q /mnt; then
         DEVICE=$(ls /dev/xvdd /dev/nvme1n1 | head -1)
-        sudo mkfs.ext2 ${DEVICE}
+        sudo apt-get -y install xfsprogs
+        sudo mkfs.xfs ${DEVICE}
         sudo mount ${DEVICE} /mnt
     fi
     until sudo apt-get update; do
@@ -224,7 +228,7 @@ SlaveTemplate getTemplate(String OSType, String AZ) {
         '',                                         // String userData
         execMap[OSType],                            // String numExecutors
         userMap[OSType],                            // String remoteAdmin
-        new UnixData('', '', '22'),                 // AMITypeData amiType
+        new UnixData('', '', '', '22'),                 // AMITypeData amiType
         '-Xmx512m -Xms512m',                        // String jvmopts
         false,                                      // boolean stopOnTerminate
         netMap[AZ],                                 // String subnetId
@@ -265,8 +269,11 @@ String region = 'us-west-2'
         privateKey,                             // String privateKey
         '240',                                   // String instanceCapStr
         [
-            getTemplate('psmdb', "${region}${it}"),
-        ]                                       // List<? extends SlaveTemplate> templates
+            getTemplate('docker', "${region}${it}"),
+            getTemplate('psmdb',  "${region}${it}"),
+        ],
+        '',
+        ''                                    // List<? extends SlaveTemplate> templates
     )
 
     // add cloud configuration to Jenkins
