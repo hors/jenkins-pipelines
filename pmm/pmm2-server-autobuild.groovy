@@ -1,11 +1,11 @@
-library changelog: false, identifier: 'lib@master', retriever: modernSCM([
+library changelog: false, identifier: 'lib@pmm-3746', retriever: modernSCM([
     $class: 'GitSCMSource',
-    remote: 'https://github.com/Percona-Lab/jenkins-pipelines.git'
+    remote: 'https://github.com/hors/jenkins-pipelines.git'
 ]) _
 
 pipeline {
     environment {
-        DESTINATION = 'laboratory'
+        DESTINATION = 'pmm2-components/yum/laboratory'
     }
     agent {
         label 'large-amazon'
@@ -41,51 +41,6 @@ pipeline {
                 stash includes: 'uploadPath', name: 'uploadPath'
                 archiveArtifacts 'shortCommit'
                 slackSend channel: '#pmm-ci', color: '#FFFF00', message: "[${JOB_NAME}]: build started - ${BUILD_URL}"
-            }
-        }
-        stage('Build client source') {
-            steps {
-                sh '''
-                    sg docker -c "
-                        export pmm_version=$(cat VERSION)
-                        ./build/bin/build-client-source
-                    "
-                '''
-                stash includes: 'results/source_tarball/*.tar.*', name: 'source.tarball'
-                uploadTarball('source')
-            }
-        }
-        stage('Build client binary') {
-            steps {
-                sh '''
-                    sg docker -c "
-                        export pmm_version=$(cat VERSION)
-                        ./build/bin/build-client-binary
-                    "
-                '''
-                stash includes: 'results/tarball/*.tar.*', name: 'binary.tarball'
-                uploadTarball('binary')
-            }
-        }
-        stage('Build client source rpm') {
-            steps {
-                sh 'sg docker -c "./build/bin/build-client-srpm centos:6"'
-                stash includes: 'results/srpm/pmm*-client-*.src.rpm', name: 'rpms'
-                uploadRPM()
-            }
-        }
-        stage('Build client binary rpm') {
-            steps {
-                sh '''
-                    sg docker -c "
-                        ./build/bin/build-client-rpm centos:7
-
-                        mkdir -p tmp/pmm-server/RPMS/
-                        cp results/rpm/pmm*-client-*.rpm tmp/pmm-server/RPMS/
-                    "
-                '''
-                stash includes: 'tmp/pmm-server/RPMS/*.rpm', name: 'rpms'
-                uploadRPM()
             }
         }
         stage('Build server packages') {
