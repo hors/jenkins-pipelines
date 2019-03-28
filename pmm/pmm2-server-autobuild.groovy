@@ -1,6 +1,6 @@
-library changelog: false, identifier: 'lib@master', retriever: modernSCM([
+library changelog: false, identifier: 'lib@pmm-3757', retriever: modernSCM([
     $class: 'GitSCMSource',
-    remote: 'https://github.com/Percona-Lab/jenkins-pipelines.git'
+    remote: 'https://github.com/hors/jenkins-pipelines.git'
 ]) _
 
 pipeline {
@@ -28,7 +28,7 @@ pipeline {
             steps {
                 installDocker()
 
-                git poll: true, branch: GIT_BRANCH, url: 'http://github.com/Percona-Lab/pmm-submodules'
+                git poll: true, branch: 'pmm-3757_qan', url: 'http://github.com/hors/pmm-submodules'
                 sh '''
                     git reset --hard
                     git clean -xdf
