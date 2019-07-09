@@ -1,6 +1,6 @@
-library changelog: false, identifier: 'lib@master', retriever: modernSCM([
+library changelog: false, identifier: 'lib@pmm-4307-fix-server-autobuild', retriever: modernSCM([
     $class: 'GitSCMSource',
-    remote: 'https://github.com/Percona-Lab/jenkins-pipelines.git'
+    remote: 'https://github.com/hors/jenkins-pipelines.git'
 ]) _
 
 pipeline {
@@ -12,16 +12,13 @@ pipeline {
     }
     parameters {
         string(
-            defaultValue: 'PMM-2.0',
+            defaultValue: 'pmm2-server-autobuild.groovy',
             description: 'Tag/Branch for pmm-submodules repository',
             name: 'GIT_BRANCH')
     }
     options {
         skipDefaultCheckout()
         disableConcurrentBuilds()
-    }
-    triggers {
-        upstream upstreamProjects: 'pmm2-submodules-rewind', threshold: hudson.model.Result.SUCCESS
     }
     stages {
         stage('Prepare') {
@@ -53,7 +50,6 @@ pipeline {
                 archiveArtifacts 'uploadPath'
                 stash includes: 'uploadPath', name: 'uploadPath'
                 archiveArtifacts 'shortCommit'
-                slackSend channel: '#pmm-ci', color: '#FFFF00', message: "[${JOB_NAME}]: build started - ${BUILD_URL}"
             }
         }
         stage('Build client source') {
@@ -159,29 +155,9 @@ pipeline {
                 archiveArtifacts 'results/docker/TAG'
             }
         }
-        stage('Sign packages') {
-            steps {
-                signRPM()
-            }
-        }
-        stage('Push to public repository') {
-            steps {
-                sync2Prod(DESTINATION)
-            }
-        }
     }
     post {
         always {
-            script {
-                if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
-                    unstash 'IMAGE'
-                    def IMAGE = sh(returnStdout: true, script: "cat results/docker/TAG").trim()
-                    slackSend channel: '#pmm-ci', color: '#00FF00', message: "[${JOB_NAME}]: build finished - ${IMAGE}"
-                    slackSend channel: '@nailya.kutlubaeva', color: '#00FF00', message: "[${JOB_NAME}]: build finished - ${IMAGE}"
-                } else {
-                    slackSend channel: '#pmm-ci', color: '#FF0000', message: "[${JOB_NAME}]: build ${currentBuild.result}"
-                }
-            }
             sh 'sudo make clean'
             deleteDir()
         }
