@@ -60,42 +60,6 @@ pipeline {
                 archiveArtifacts 'copy.list'
             }
         }
-// Publish RPMs to repo.ci.percona.com
-        stage('Copy RPMs to PMM repo') {
-            steps {
-                unstash 'copy'
-                withCredentials([sshUserPrivateKey(credentialsId: 'repo.ci.percona.com', keyFileVariable: 'KEY_PATH', usernameVariable: 'USER')]) {
-                    sh '''
-                        cat copy.list | ssh -o StrictHostKeyChecking=no -i ${KEY_PATH} ${USER}@repo.ci.percona.com \
-                            "cat - | xargs -I{} cp -v /srv/repo-copy/pmm2-components/yum/${UPDATER_REPO}/7/RPMS/x86_64/{} /srv/repo-copy/pmm2-components/yum/release/7/RPMS/x86_64/{}"
-                    '''
-                }
-            }
-        }
-        stage('Createrepo') {
-            steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'repo.ci.percona.com', keyFileVariable: 'KEY_PATH', usernameVariable: 'USER')]) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no -i ${KEY_PATH} ${USER}@repo.ci.percona.com \
-                            createrepo --update /srv/repo-copy/pmm2-components/yum/release/7/RPMS/x86_64/
-                    '''
-                }
-            }
-        }
-// Publish RPMs to repo.percona.com
-        stage('Publish RPMs') {
-            steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'repo.ci.percona.com', keyFileVariable: 'KEY_PATH', usernameVariable: 'USER')]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i ${KEY_PATH} ${USER}@repo.ci.percona.com "
-                            rsync -avt --bwlimit=50000 --delete --progress --exclude=rsync-* --exclude=*.bak \
-                                /srv/repo-copy/pmm2-components/yum/release \
-                                10.10.9.209:/www/repo.percona.com/htdocs/pmm2-components/yum/
-                        "
-                    """
-                }
-            }
-        }
         stage('Set Tags') {
             steps {
                 withCredentials([string(credentialsId: 'GITHUB_API_TOKEN', variable: 'GITHUB_API_TOKEN')]) {
@@ -116,7 +80,6 @@ pipeline {
                             ["pmm-update"]="percona/pmm-update"
                             ["pmm-managed"]="percona/pmm-managed"
                         )
-
                         for package in "${!repo[@]}"; do
                             SHA=$(
                                 grep "^$package-$VERSION-" copy.list \
@@ -137,6 +100,7 @@ pipeline {
                         done
                     '''
                 }
+                stash includes: 'VERSION', name: 'version_file'
             }
         }
         stage('Set Docker Tag') {
@@ -144,7 +108,7 @@ pipeline {
                 label 'min-centos-7-x64'
             }
             steps {
-                installDocker()
+                unstash 'version_file'
                 withCredentials([usernamePassword(credentialsId: 'hub.docker.com', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                     sh """
                         sg docker -c "
@@ -153,32 +117,18 @@ pipeline {
                     """
                 }
                 sh """
+                    VERSION=\$(cat VERSION)
+                    TOP_VER=\$(cat VERSION | cut -d. -f1)
+                    MID_VER=\$(cat VERSION | cut -d. -f2)
+                    DOCKER_MID="\$TOP_VER.\$MID_VER"
                     sg docker -c "
-                        docker pull ${DOCKER_VERSION}
-                        docker tag ${DOCKER_VERSION} percona/pmm-server:${VERSION}
-                        docker tag ${DOCKER_VERSION} percona/pmm-server:${DOCKER_MID}
-                        docker tag ${DOCKER_VERSION} percona/pmm-server:${TOP_VER}
-                        docker push percona/pmm-server:${VERSION}
-                        docker push percona/pmm-server:${DOCKER_MID}
-                        docker push percona/pmm-server:${TOP_VER}
-                        if [ ${TOP_VER} = 1 ]; then
-                            docker push percona/pmm-server:latest
-                        fi
-                        docker save percona/pmm-server:${VERSION} | xz > pmm-server-${VERSION}.docker
-
-                        docker pull ${DOCKER_CLIENT_VERSION}
-                        docker tag ${DOCKER_CLIENT_VERSION} perconalab/pmm-client:${VERSION}
-                        docker tag ${DOCKER_CLIENT_VERSION} perconalab/pmm-client:latest
-                        docker push perconalab/pmm-client:${VERSION}
-                        docker save perconalab/pmm-client:${VERSION} | xz > pmm-client-${VERSION}.docker
+                        echo "\${VERSION}"
+                        echo "\${MID_VER}"
+                        echo "\${TOP_VER}"
+                        echo "\${DOCKER_MID}"
+                        echo "\${DOCKER_VERSION}"
                     "
                 """
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'AMI/OVF', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-                    sh """
-                        aws s3 cp --only-show-errors pmm-server-${VERSION}.docker s3://percona-vm/pmm-server-${VERSION}.docker
-                        aws s3 cp --only-show-errors pmm-client-${VERSION}.docker s3://percona-vm/pmm-client-${VERSION}.docker
-                    """
-                }
                 deleteDir()
             }
         }
@@ -186,16 +136,6 @@ pipeline {
     post {
         always {
             deleteDir()
-        }
-        success {
-            unstash 'copy'
-            script {
-                def IMAGE = sh(returnStdout: true, script: "cat copy.list").trim()
-                slackSend channel: '#pmm-ci', color: '#00FF00', message: "[${specName}]: build finished - ${IMAGE}"
-            }
-        }
-        failure {
-            slackSend channel: '#pmm-ci', color: '#FF0000', message: "[${specName}]: build failed"
         }
     }
 }
