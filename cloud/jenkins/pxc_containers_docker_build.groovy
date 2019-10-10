@@ -2,11 +2,11 @@ void build(String IMAGE_PREFIX){
     sh """
         cd ./source/
         if [ ${IMAGE_PREFIX} = pxc ]; then
-            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX} -f pxc-57/Dockerfile.k8s pxc-57
+            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX}-pr0101 -f pxc-57/Dockerfile pxc-57
         elif [ ${IMAGE_PREFIX} = proxysql ]; then
-            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX} -f proxysql/Dockerfile.k8s proxysql
+            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX}-pr01 -f proxysql/Dockerfile.k8s proxysql
         else
-            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX} images/${IMAGE_PREFIX}-image
+            docker build --no-cache --squash -t perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX}-pr01 images/${IMAGE_PREFIX}-image
         fi
     """
 }
@@ -29,7 +29,7 @@ void pushImageToDocker(String IMAGE_PREFIX){
             IMAGE_PREFIX=${IMAGE_PREFIX}
             sg docker -c "
                 docker login -u '${USER}' -p '${PASS}'
-                docker push perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX}
+                docker push perconalab/percona-xtradb-cluster-operator:master-${IMAGE_PREFIX}-pr0101
                 docker logout
             "
         """
@@ -58,7 +58,7 @@ void pushImageToRhel(String IMAGE_PREFIX){
 pipeline {
     parameters {
         string(
-            defaultValue: 'master',
+            defaultValue: 'CLOUD-394-decrease-pxc-image-size',
             description: 'Tag/Branch for Percona-Lab/percona-openshift repository',
             name: 'GIT_BRANCH')
         string(
@@ -66,7 +66,7 @@ pipeline {
             description: 'Percona-Lab/percona-openshift repository',
             name: 'GIT_REPO')
         string(
-            defaultValue: 'master',
+            defaultValue: 'CLOUD-394-decrease-pxc-57-image-size-docker',
             description: 'Tag/Branch for percona/percona-docker repository',
             name: 'GIT_PD_BRANCH')
         string(
@@ -85,7 +85,7 @@ pipeline {
     stages {
         stage('Prepare') {
             steps {
-                git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                git branch: 'CLOUD-394-decrease-pxc-image-size', url: 'https://github.com/hors/jenkins-pipelines'
                 sh """
                     TRIVY_VERSION=\$(curl --silent 'https://api.github.com/repos/aquasecurity/trivy/releases/latest' | grep '"tag_name":' | tr -d '"' | sed -E 's/.*v(.+),.*/\\1/')
                     wget https://github.com/aquasecurity/trivy/releases/download/v\${TRIVY_VERSION}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
@@ -101,14 +101,19 @@ pipeline {
                 stash includes: "source/**", name: "sourceFILES"
             }
         }
-        stage('Build docker images') {
+/*
+        stage('Build backup docker images') {
             steps {
                 unstash "sourceFILES"
                 retry(3) {
                     build('backup')
                 }
+                sh '''
+                    sudo docker images
+                '''
             }
         }
+*/
         stage('Build pxc docker images') {
             steps {
                 sh '''
@@ -120,22 +125,26 @@ pipeline {
                    export GIT_REPO=$GIT_PD_REPO
                    export GIT_BRANCH=$GIT_PD_BRANCH
                    ./cloud/local/checkout
-                """          
-                retry(3) {
-                    build('proxysql')
-                }
+                """
+//                retry(3) {
+//                    build('proxysql')
+//                }
                 retry(3) {
                     build('pxc')
                 }
+                sh '''
+                    sudo docker images
+                '''
             }
         }
         stage('Push Images to Docker registry') {
             steps {
                 pushImageToDocker('pxc')
-                pushImageToDocker('proxysql')
-                pushImageToDocker('backup')
+//                pushImageToDocker('proxysql')
+//                pushImageToDocker('backup')
             }
         }
+/*
         stage('Push Images to RHEL registry') {
             steps {
                 pushImageToRhel('pxc')
@@ -143,6 +152,7 @@ pipeline {
                 pushImageToRhel('backup')
             }
         }
+
         stage('Check Docker images') {
             steps {
                 checkImageForDocker('pxc')
@@ -156,17 +166,15 @@ pipeline {
                 '''
             }
         }
+*/
     }
     post {
         always {
-            archiveArtifacts '*.log'
+  //          archiveArtifacts '*.log'
             sh '''
                 sudo docker rmi -f \$(sudo docker images -q) || true
             '''
             deleteDir()
-        }
-        failure {
-            slackSend channel: '#cloud-dev-ci', color: '#FF0000', message: "Building of PXC docker images failed. Please check the log ${BUILD_URL}"
         }
     }
 }
