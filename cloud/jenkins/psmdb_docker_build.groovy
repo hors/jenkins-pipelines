@@ -2,7 +2,7 @@ void build(String IMAGE_PREFIX){
     sh """
         cd ./source/
         DOCKER_FILE_PREFIX=\$(echo ${IMAGE_PREFIX} | tr -d '.' | tr -d 'mongod')
-        docker build --no-cache --squash -t perconalab/percona-server-mongodb-operator:master-${IMAGE_PREFIX} -f percona-server-mongodb.\$DOCKER_FILE_PREFIX/Dockerfile.k8s percona-server-mongodb.\$DOCKER_FILE_PREFIX
+        docker build --no-cache --squash -t perconalab/percona-server-mongodb-operator:master-${IMAGE_PREFIX}-pr01 -f percona-server-mongodb.\$DOCKER_FILE_PREFIX/Dockerfile.k8s percona-server-mongodb.\$DOCKER_FILE_PREFIX
     """
 }
 void checkImageForDocker(String IMAGE_PREFIX){
@@ -36,7 +36,7 @@ void pushImageToDocker(String IMAGE_PREFIX){
             IMAGE_PREFIX=${IMAGE_PREFIX}
             sg docker -c "
                 docker login -u '${USER}' -p '${PASS}'
-                docker push perconalab/percona-server-mongodb-operator:master-${IMAGE_PREFIX}
+                docker push perconalab/percona-server-mongodb-operator:master-${IMAGE_PREFIX}-pr01
                 docker logout
             "
         """
@@ -92,7 +92,7 @@ pipeline {
             description: 'percona/percona-server-mongodb-operator repository',
             name: 'GIT_REPO')
         string(
-            defaultValue: 'master',
+            defaultValue: 'CLOUD-395-dec-psmdb-docker-images',
             description: 'Tag/Branch for percona/percona-docker repository',
             name: 'GIT_PD_BRANCH')
         string(
@@ -111,7 +111,7 @@ pipeline {
     stages {
         stage('Prepare') {
             steps {
-                git branch: 'master', url: 'https://github.com/Percona-Lab/jenkins-pipelines'
+                git branch: 'CLOUD-395-dec-psmdb-docker-images', url: 'https://github.com/hors/jenkins-pipelines'
                 sh """
                     TRIVY_VERSION=\$(curl --silent 'https://api.github.com/repos/aquasecurity/trivy/releases/latest' | grep '"tag_name":' | tr -d '"' | sed -E 's/.*v(.+),.*/\\1/')
                     wget https://github.com/aquasecurity/trivy/releases/download/v\${TRIVY_VERSION}/trivy_\${TRIVY_VERSION}_Linux-64bit.tar.gz
@@ -165,6 +165,12 @@ pipeline {
                 retry(3) {
                     build('mongod4.0')
                 }
+                retry(3) {
+                    build('mongod4.2')
+                }
+                sh """
+                    docker images
+                """
             }
         }
 
@@ -172,9 +178,10 @@ pipeline {
             steps {
                 pushImageToDocker('mongod3.6')
                 pushImageToDocker('mongod4.0')
+                pushImageToDocker('mongod4.2')
             }
         }
-
+/*
         stage('Push PSMDB images to RHEL registry') {
             steps {
                 pushImageToRhel('mongod3.6')
@@ -195,6 +202,7 @@ pipeline {
                 '''
             }
         }
+*/
     }
 
     post {
