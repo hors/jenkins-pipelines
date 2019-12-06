@@ -1,0 +1,15 @@
+- job:
+    name: psmdb-operator-aws-openshift-4
+    project-type: pipeline
+    description: |
+        Do not edit this job through the web!
+    pipeline-scm:
+      scm:
+        - git:
+            url: https://github.com/hors/jenkins-pipelines.git
+            branches:
+            - 'CLOUD-453-add-openshift-41-env'
+            wipe-workspace: false
+      lightweight-checkout: true
+      script-path: cloud/jenkins/psmdb_operator_aws_openshift-4.groovy
+
