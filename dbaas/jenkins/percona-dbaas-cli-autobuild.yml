@@ -1,0 +1,15 @@
+- job:
+    name: percona-dbaas-cli-autobuild
+    project-type: pipeline
+    description: |
+        Do not edit this job through the web!
+    pipeline-scm:
+      scm:
+        - git:
+            url: https://github.com/hors/jenkins-pipelines.git
+            branches:
+            - 'CLOUD-476-create-build-inf-dbaas'
+            wipe-workspace: false
+      lightweight-checkout: true
+      script-path: dbaas/jenkins/percona-dbaas-cli-autobuild.groovy
+
