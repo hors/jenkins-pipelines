@@ -176,7 +176,7 @@ pipeline {
                         sudo rm -rf source
                         ./cloud/local/checkout $GIT_REPO $GIT_BRANCH
 
-                        cp $CLOUD_SECRET_FILE ./source/e2e-tests/conf/cloud-secret.yml
+                        cp $CLOUD_SECRET_FILE ./source/e2e-tests/conf/secret.yml
 
                         if [ -n "${PXC_OPERATOR_IMAGE}" ]; then
                             echo "SKIP: Build is not needed, PXC operator image was set!"
