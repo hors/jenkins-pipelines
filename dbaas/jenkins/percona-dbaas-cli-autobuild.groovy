@@ -1,6 +1,6 @@
-library changelog: false, identifier: 'lib@master', retriever: modernSCM([
+library changelog: false, identifier: 'lib@dbaas-buils-test', retriever: modernSCM([
     $class: 'GitSCMSource',
-    remote: 'https://github.com/Percona-Lab/jenkins-pipelines.git'
+    remote: 'https://github.com/hors/jenkins-pipelines.git'
 ]) _
 
 pipeline {
@@ -57,6 +57,7 @@ pipeline {
                 }
                 stash includes: 'results/tarball/*.tar.*', name: 'binary.tarball'
                 uploadTarball('binary')
+                archiveArtifacts 'results/tarball/*.tar.*'
             }
         }
         stage('Build dbaas source rpm') {
@@ -97,12 +98,6 @@ pipeline {
             steps {
                 signRPM()
                 signDEB()
-            }
-        }
-        stage('Push to public repository') {
-            steps {
-                // sync packages
-                sync2ProdDBaas('experimental')
             }
         }
     }
