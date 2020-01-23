@@ -1,0 +1,15 @@
+- job:
+    name: SET TAG
+    project-type: pipeline
+    description: |
+        Do not edit this job through the web!
+    pipeline-scm:
+      scm:
+        - git:
+            url: https://github.com/hors/jenkins-pipelines.git
+            branches:
+            - 'set-tag'
+            wipe-workspace: false
+      lightweight-checkout: true
+      script-path: cloud/jenkins/set-tag.groovy
+
